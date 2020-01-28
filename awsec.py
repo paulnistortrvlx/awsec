@@ -13,6 +13,8 @@ r53 = boto3.client('route53')
 wafcl = boto3.client('waf')
 ec2 = boto3.client('ec2')
 rds = boto3.client('rds')
+gd = boto3.client('guardduty')
+kms = boto3.client('kms')
 
 
 def s3_origins():
@@ -134,14 +136,18 @@ def cloudfront_audit():
 
 
 def s3_audit():
+    ret = []
     rq = s3.list_buckets()
     bucket_list = []
     for bucket in rq['Buckets']:
         bucket_list.append(bucket['Name'])
     rs3 = boto3.resource('s3')
     for bucket in bucket_list:
-        r = rs3.BucketLogging(bucket_list[1])
-        print(f'{bucket} logging {r.logging_enabled}')
+        r = rs3.BucketLogging(bucket)
+        if not r.logging_enabled:
+            ret.append(bucket)
+            print(f'{bucket} logging {r.logging_enabled}')
+    print(len(ret))
 
 
 def zones():
@@ -208,6 +214,12 @@ def all_rds_instances():
     rq = rds.describe_db_instances()
     for db in rq['DBInstances']:
         ret.update({db['DbiResourceId']: db['DBInstanceIdentifier']})
+        try:
+            print(db['DBName'], db['DBInstanceIdentifier'], db['Engine'],
+                  db['CACertificateIdentifier'])
+        except:
+            print(db['DBInstanceIdentifier'], db['Engine'],
+                  db['CACertificateIdentifier'])
     return ret
 
 
@@ -228,11 +240,40 @@ def all_rds_snapshots():
     return ret
 
 
+def guard_duty():
+    rq = gd.list_detectors()
+    if not rq['DetectorIds']:
+        print(rq['DetectorIds'])
+
+
+def kms_keys():
+    ret = []
+    rk = kms.list_keys()
+    for key in rk['Keys']:
+        ret.append(key['KeyId'])
+    return ret
+
+
+def kms_rotation():
+    # ret = []
+    for key in kms_keys():
+        try:
+            r = kms.get_key_rotation_status(KeyId=key)
+            if not r['KeyRotationEnabled']:
+                print(key, r['KeyRotationEnabled'])
+        except:
+            print(f'{key} read error')
+
+
 if __name__ == '__main__':
     # s3_public_access()
     # cloudfront_audit()
     # assume_role()
     # s3_audit()
+    # print('====\nAWSConfig results\n')
+    # for res in eval_results('s3-bucket-logging-enabled'):
+    #     print(res)
+    # print(len(eval_results('s3-bucket-logging-enabled')))
     # for account in ACCOUNTS:
     #     os.system(f'awsume {account}')
     #     print(f'\nRoute53 zones on {account}')
@@ -246,6 +287,17 @@ if __name__ == '__main__':
     # List orphan snapshots
     # rds_list = all_rds_instances()
     # snap_list = all_rds_snapshots()
-    for snap in snap_list:
-        if snap[1] not in rds_list.keys():
-            print(snap)
+    # for snap in snap_list:
+    #     if snap[1] not in rds_list.keys():
+    #         print(snap)
+    #
+    # Get WebACL IDs
+    # urls = [
+    #     'armadillo-teller.testing.digital.travelex.net',
+    #     'armadillo-teller.uat.digital.travelex.net',
+    # ]
+    # waf(urls)
+    # guard_duty()
+    # print(kms_keys())
+    # kms_rotation()
+    all_rds_instances()
