@@ -1,1 +1,12 @@
 Run make install to create virtual environment and install dependencies
+
+To execute script for all/some accounts:
+
+```
+$ export accounts=(acc1 acc2 accn)
+$ for account in ${accounts[@]}; do awsume $account; .venv/bin/python3 awsec.py; done
+```
+
+N.B.
+- You need ''awsume''
+- acc1..accn are the profiles exactly as in .aws/config

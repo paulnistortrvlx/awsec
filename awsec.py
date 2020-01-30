@@ -18,6 +18,10 @@ kms = boto3.client('kms')
 
 
 def s3_origins():
+    '''
+    return origins of cloudfront distributions
+    '''
+
     s3orgs = []
     r = cf.list_distributions()
     try:
@@ -28,11 +32,15 @@ def s3_origins():
                     s3orgs.append(item['DomainName'].replace(
                         '.s3.amazonaws.com', ''))
         return s3orgs
-    except:
+    except Exception:
         return []
 
 
 def empty_buckets(buckets):
+    '''
+    takes a list of buckets as argument and return a list of empty buckets
+    '''
+
     ret = []
     for bucket in buckets:
         try:
@@ -47,6 +55,10 @@ def empty_buckets(buckets):
 
 
 def eval_results(rule):
+    '''
+    takes an AWSConfig rule and return list of findings for it
+    '''
+
     ret = []
     r = cfg.get_compliance_details_by_config_rule(
         ConfigRuleName=rule,
@@ -60,6 +72,11 @@ def eval_results(rule):
 
 
 def cf_distributions():
+    '''
+    return a dictionary with distribution ID as key and the value is a list
+    with LoggingEnabled value and the origin
+    '''
+
     rq = cf.list_distributions()
     dist_list = []
     ret = {}
@@ -72,12 +89,24 @@ def cf_distributions():
             en = drq['Distribution']['DistributionConfig']['Logging']['Enabled']
             try:
                 info = drq['Distribution']['DistributionConfig']['Aliases']['Items'][0]
-            except:
+            except Exception:
                 info = drq['Distribution']['DistributionConfig']['Origins']['Items'][0]['DomainName']
             ret.update({dist: [en, info]})
         return ret
-    except:
+    except Exception:
         return {}
+
+
+def cloudfront_audit():
+    '''
+    Display the distributions without logging enabled
+    '''
+
+    dists = cf_distributions()
+    print(dists)
+    for id, info in dists.items():
+        if not info[0]:
+            print(f'{id} : {info[1]}')
 
 
 # example of cloudfront distribution update function
@@ -94,8 +123,8 @@ def cf_distributions():
 #     rq_old['DistributionConfig']['Logging'] = {
 #         'Enabled': True,
 #         'IncludeCookies': False,
-#         'Bucket': 'am-week.s3.amazonaws.com',
-#         'Prefix': f'cloudfront/dn'
+#         'Bucket': 'bucketName',
+#         'Prefix': 'prefix'
 #     }
 #     rq_new = cf.update_distribution(
 #         DistributionConfig=rq_old['DistributionConfig'],
@@ -106,6 +135,12 @@ def cf_distributions():
 
 
 def s3_public_access():
+    '''
+    Display the buckets with public access permited from
+    AWSConfig findings by category: CloudFront buckets, 
+    nonCloudFront buckets and empty buckets
+    '''
+
     s3orgs = s3_origins()
     all_nc = eval_results('s3-bucket-public-read-prohibited')
     cf_buckets = []
@@ -128,14 +163,12 @@ def s3_public_access():
         print(eb)
 
 
-def cloudfront_audit():
-    dists = cf_distributions()
-    for id, info in dists.items():
-        if info[0] == False:
-            print(f'{id} : {info[1]}')
-
-
 def s3_audit():
+    '''
+    Display the Buckets without logging enbled
+    and count them
+    '''
+
     ret = []
     rq = s3.list_buckets()
     bucket_list = []
@@ -151,6 +184,10 @@ def s3_audit():
 
 
 def zones():
+    '''
+    Displays the DNS zones and if the zone has logging enabled
+    '''
+
     r53 = boto3.client('route53')
     rq = r53.list_hosted_zones()
     for zone in rq['HostedZones']:
@@ -160,11 +197,16 @@ def zones():
         try:
             rs = r53.get_query_logging_config(Id=zone_id)
             print(rs)
-        except:
+        except Exception:
             print('No logging config\n')
 
 
 def waf(urls):
+    '''
+    takes a list of urls as input and 
+    return the WebACL Id of them
+    '''
+
     rq = wafcl.list_web_acls()
     for acl in rq['WebACLs']:
         rq = cf.list_distributions_by_web_acl_id(
@@ -174,11 +216,16 @@ def waf(urls):
                 for url in urls:
                     if url in item['Aliases']['Items']:
                         print(acl['WebACLId'])
-        except:
+        except Exception:
             pass
 
 
 def volumes():
+    '''
+    Return a list of unencrypted volumes
+    and display the count
+    '''
+
     ret = []
     vols = ec2.describe_volumes()
     for vol in vols['Volumes']:
@@ -188,9 +235,15 @@ def volumes():
     un = set(ret)
     print(len(un))
     print(ret) if len(ret) != 0 else ""
+    return ret
 
 
 def snapshots():
+    '''
+    Return a list of unencrypted snapshots
+    and display the count
+    '''
+
     ret = []
     snaps = ec2.describe_snapshots(OwnerIds=['self'])
     for snap in snaps['Snapshots']:
@@ -198,9 +251,14 @@ def snapshots():
             ret.append(snap['SnapshotId'])
     print(f'{len(ret)} unencrypted snapshots')
     print(ret) if len(ret) != 0 else ""
+    return ret
 
 
 def rds_instances():
+    '''
+    Return a list of DBs with unencrypted storage
+    '''
+
     ret = []
     rq = rds.describe_db_instances()
     for db in rq['DBInstances']:
@@ -210,6 +268,10 @@ def rds_instances():
 
 
 def all_rds_instances():
+    '''
+    Return a list of RDS DB instances
+    '''
+
     ret = {}
     rq = rds.describe_db_instances()
     for db in rq['DBInstances']:
@@ -217,13 +279,17 @@ def all_rds_instances():
         try:
             print(db['DBName'], db['DBInstanceIdentifier'], db['Engine'],
                   db['CACertificateIdentifier'])
-        except:
+        except Exception:
             print(db['DBInstanceIdentifier'], db['Engine'],
                   db['CACertificateIdentifier'])
     return ret
 
 
 def rds_snapshots():
+    '''
+    Return a list of unencrypted DB snapshots
+    '''
+
     ret = []
     rq = rds.describe_db_snapshots()
     for db in rq['DBSnapshots']:
@@ -233,6 +299,10 @@ def rds_snapshots():
 
 
 def all_rds_snapshots():
+    '''
+    Return a list of all DB snapshots
+    '''
+
     ret = []
     rq = rds.describe_db_snapshots()
     for db in rq['DBSnapshots']:
@@ -241,12 +311,19 @@ def all_rds_snapshots():
 
 
 def guard_duty():
+    '''
+    Display all existing GuardDuty detector resources
+    '''
+
     rq = gd.list_detectors()
-    if not rq['DetectorIds']:
-        print(rq['DetectorIds'])
+    print(rq['DetectorIds'])
 
 
 def kms_keys():
+    '''
+    retur a list of all KMS keys
+    '''
+
     ret = []
     rk = kms.list_keys()
     for key in rk['Keys']:
@@ -255,19 +332,22 @@ def kms_keys():
 
 
 def kms_rotation():
-    # ret = []
+    '''
+    Display the keys without rotation enabled
+    '''
+
     for key in kms_keys():
         try:
             r = kms.get_key_rotation_status(KeyId=key)
             if not r['KeyRotationEnabled']:
                 print(key, r['KeyRotationEnabled'])
-        except:
+        except Exception:
             print(f'{key} read error')
 
 
 if __name__ == '__main__':
     # s3_public_access()
-    # cloudfront_audit()
+    # print(cloudfront_audit())
     # assume_role()
     # s3_audit()
     # print('====\nAWSConfig results\n')
@@ -292,12 +372,9 @@ if __name__ == '__main__':
     #         print(snap)
     #
     # Get WebACL IDs
-    # urls = [
-    #     'armadillo-teller.testing.digital.travelex.net',
-    #     'armadillo-teller.uat.digital.travelex.net',
-    # ]
+    # urls = []
     # waf(urls)
-    # guard_duty()
+    # print(guard_duty())
     # print(kms_keys())
     # kms_rotation()
     all_rds_instances()
